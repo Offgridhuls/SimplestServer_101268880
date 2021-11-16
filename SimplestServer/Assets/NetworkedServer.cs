@@ -67,6 +67,7 @@ public class NetworkedServer : MonoBehaviour
         byte error = 0;
         byte[] buffer = Encoding.Unicode.GetBytes(msg);
         NetworkTransport.Send(hostID, id, reliableChannelID, buffer, msg.Length * sizeof(char), out error);
+
     }
     
     private void ProcessRecievedMsg(string msg, int id)
@@ -83,6 +84,7 @@ public class NetworkedServer : MonoBehaviour
             string n = csv[1];
             string p = csv[2];
             bool nameIsInUse = false;
+
             foreach (PlayerAccount pa in playerAccounts)
             {
                 if (pa.name == n)
@@ -104,9 +106,9 @@ public class NetworkedServer : MonoBehaviour
                 SendMessageToClient(ServerToClientSignifiers.accountCreationComplete + "", id);
             }
         }
-        else if (signifier == ClientToServerSignifiers.createAccount)
+        else if (signifier == ClientToServerSignifiers.login)
         {
-
+            Debug.Log("log in to account");
         }
     }
 
@@ -121,11 +123,12 @@ public class PlayerAccount
         password = Password;
     }
 }
+
 public static class ClientToServerSignifiers
 {
     public const int createAccount = 1;
 
-    public const int login = 1;
+    public const int login = 2;
 }
 
 public static class ServerToClientSignifiers
