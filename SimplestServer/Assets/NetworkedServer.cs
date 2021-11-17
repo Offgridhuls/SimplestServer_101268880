@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using System.IO;
 using UnityEngine.UI;
+using System.Linq;
 
 public class NetworkedServer : MonoBehaviour
 {
@@ -15,10 +16,14 @@ public class NetworkedServer : MonoBehaviour
     int hostID;
     int socketPort = 5491;
 
-    private LinkedList<PlayerAccount> playerAccounts;
+    private List<PlayerAccount> playerAccounts = new List<PlayerAccount>();
+
+    Match newMatch = new Match();
     // Start is called before the first frame update
+
     void Start()
     {
+
         NetworkTransport.Init();
         ConnectionConfig config = new ConnectionConfig();
         reliableChannelID = config.AddChannel(QosType.Reliable);
@@ -26,7 +31,6 @@ public class NetworkedServer : MonoBehaviour
         HostTopology topology = new HostTopology(config, maxConnections);
         hostID = NetworkTransport.AddHost(topology, socketPort, null);
 
-        playerAccounts = new LinkedList<PlayerAccount>();
 
     }
 
@@ -56,6 +60,11 @@ public class NetworkedServer : MonoBehaviour
                 ProcessRecievedMsg(msg, recConnectionID);
                 break;
             case NetworkEventType.DisconnectEvent:
+                var player = newMatch.connectedAccounts.FirstOrDefault(a => a.connectionID == recConnectionID);
+                if(player != null)
+                {
+                    newMatch.connectedAccounts.Remove(player);
+                }
                 Debug.Log("Disconnection, " + recConnectionID);
                 break;
         }
@@ -69,7 +78,7 @@ public class NetworkedServer : MonoBehaviour
         NetworkTransport.Send(hostID, id, reliableChannelID, buffer, msg.Length * sizeof(char), out error);
 
     }
-    
+
     private void ProcessRecievedMsg(string msg, int id)
     {
         Debug.Log("msg recieved = " + msg + ".  connection id = " + id);
@@ -93,34 +102,99 @@ public class NetworkedServer : MonoBehaviour
 
             if (nameIsInUse)
             {
-                SendMessageToClient(ServerToClientSignifiers.accountCreationFailed + " ", id);
+                SendMessageToClient(ServerToClientSignifiers.accountCreationFailed + ",", id);
                
             }
 
             else
             {
-                PlayerAccount newPlayerAccount = new PlayerAccount(n, p);
+                PlayerAccount newPlayerAccount = new PlayerAccount(n, p, id);
 
-                playerAccounts.AddLast(newPlayerAccount);
+                playerAccounts.Add(newPlayerAccount);
 
-                SendMessageToClient(ServerToClientSignifiers.accountCreationComplete + "", id);
+                SendMessageToClient(ServerToClientSignifiers.accountCreationComplete + ",", id);
             }
         }
         else if (signifier == ClientToServerSignifiers.login)
         {
-            Debug.Log("log in to account");
+            var account = playerAccounts.FirstOrDefault(p => p.name == csv[1] && p.password == csv[2]);
+            if(account != null)
+            {
+                SendMessageToClient(ServerToClientSignifiers.loginComplete + "," , id);
+                newMatch.connectedAccounts.Add(account);
+
+                if(newMatch.connectedAccounts.Count > Match.maxGameClients)
+                {
+                    SendMessageToClient(ServerToClientSignifiers.waiting + ",0", id);
+
+                }
+                else if(newMatch.connectedAccounts.Count > 1)
+                {
+                    int randomUser = UnityEngine.Random.Range(0, 1);
+                    SendMessageToClient(ServerToClientSignifiers.playTurn + ",1", newMatch.connectedAccounts[randomUser].connectionID);
+                    newMatch.connectedAccounts[randomUser].isO = true;
+
+                    newMatch.connectedAccounts[(randomUser == 0 ? 1 : 0)].isO = false;
+                    SendMessageToClient(ServerToClientSignifiers.playTurn + ",-1", newMatch.connectedAccounts[(randomUser == 0 ? 1 : 0)].connectionID);
+
+                }
+                else if(newMatch.connectedAccounts.Count == 1)
+                {
+                    SendMessageToClient(ServerToClientSignifiers.waiting + ",1", id);
+
+                }
+             
+
+            }
+        }
+        else if(signifier == ClientToServerSignifiers.sendPlay)
+        {
+            if(int.TryParse(csv[1], out var result))
+            {
+                var player = newMatch.connectedAccounts.FirstOrDefault(x => x.connectionID == id);
+                if(player != null)
+                {
+                    newMatch.gameData[result] = player.isO ? 1 : 0;
+                    newMatch.isWinner(player.isO ? 1 : 0);
+                    if (newMatch.isWinner(player.isO ? 1 : 0))
+                    {
+                        foreach(var p in newMatch.connectedAccounts)
+                        {
+                            if(p == player)
+                            {
+                                SendMessageToClient(ServerToClientSignifiers.winner + ",1", p.connectionID);
+                            }
+                            else
+                            {
+                                SendMessageToClient(ServerToClientSignifiers.winner + ",0," + player.name, p.connectionID);
+                            }
+                        }
+                    }
+                    else
+                    {
+
+                        SendMessageToClient(ServerToClientSignifiers.playTurn + ",0", )
+                    }
+                }
+            }
         }
     }
-
 }
+
+
 public class PlayerAccount
 {
     public string name, password;
 
-    public PlayerAccount(string Name, string Password)
+    public int connectionID;
+
+    public bool isO;
+    public PlayerAccount(string Name, string Password, int ID)
     {
         name = Name;
         password = Password;
+
+        connectionID = ID;
     }
 }
 
@@ -129,6 +203,8 @@ public static class ClientToServerSignifiers
     public const int createAccount = 1;
 
     public const int login = 2;
+
+    public const int sendPlay = 3;
 }
 
 public static class ServerToClientSignifiers
@@ -140,4 +216,13 @@ public static class ServerToClientSignifiers
     public const int accountCreationComplete = 3;
 
     public const int accountCreationFailed = 4;
+
+    public const int isSpectator = 5;
+
+    public const int waiting = 6;
+
+    public const int playTurn = 7;
+
+    public const int winner = 8;
+
 }
