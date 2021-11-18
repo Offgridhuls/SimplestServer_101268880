@@ -102,8 +102,9 @@ public class NetworkedServer : MonoBehaviour
 
             if (nameIsInUse)
             {
+
                 SendMessageToClient(ServerToClientSignifiers.accountCreationFailed + ",", id);
-               
+
             }
 
             else
@@ -125,15 +126,18 @@ public class NetworkedServer : MonoBehaviour
 
                 if(newMatch.connectedAccounts.Count > Match.maxGameClients)
                 {
+
                     SendMessageToClient(ServerToClientSignifiers.waiting + ",0", id);
 
                 }
                 else if(newMatch.connectedAccounts.Count > 1)
                 {
+
                     int randomUser = UnityEngine.Random.Range(0, 1);
+
+
                     SendMessageToClient(ServerToClientSignifiers.playTurn + ",1", newMatch.connectedAccounts[randomUser].connectionID);
                     newMatch.connectedAccounts[randomUser].isO = true;
-
                     newMatch.connectedAccounts[(randomUser == 0 ? 1 : 0)].isO = false;
                     SendMessageToClient(ServerToClientSignifiers.playTurn + ",-1", newMatch.connectedAccounts[(randomUser == 0 ? 1 : 0)].connectionID);
 
@@ -143,8 +147,6 @@ public class NetworkedServer : MonoBehaviour
                     SendMessageToClient(ServerToClientSignifiers.waiting + ",1", id);
 
                 }
-             
-
             }
         }
         else if(signifier == ClientToServerSignifiers.sendPlay)
@@ -155,7 +157,25 @@ public class NetworkedServer : MonoBehaviour
                 if(player != null)
                 {
                     newMatch.gameData[result] = player.isO ? 1 : 0;
-                    newMatch.isWinner(player.isO ? 1 : 0);
+                    for (int i = 0; i < newMatch.connectedAccounts.Count; i++)
+                    {
+
+                        if (newMatch.connectedAccounts[i] == player)
+                            continue;
+
+                        if (i > 1)
+                        {
+
+                            SendMessageToClient(ServerToClientSignifiers.playTurn + "," + (player.isO ? "1" : "0") + "," + result + ",0", newMatch.connectedAccounts[i].connectionID);
+
+                        }
+                        else
+                        {
+
+                            SendMessageToClient(ServerToClientSignifiers.playTurn + "," + (player.isO ? "1" : "0") + "," + result, newMatch.connectedAccounts[i].connectionID);
+
+                        }
+                    }
                     if (newMatch.isWinner(player.isO ? 1 : 0))
                     {
                         foreach(var p in newMatch.connectedAccounts)
@@ -169,11 +189,6 @@ public class NetworkedServer : MonoBehaviour
                                 SendMessageToClient(ServerToClientSignifiers.winner + ",0," + player.name, p.connectionID);
                             }
                         }
-                    }
-                    else
-                    {
-
-                        SendMessageToClient(ServerToClientSignifiers.playTurn + ",0", )
                     }
                 }
             }
