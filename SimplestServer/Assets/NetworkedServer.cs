@@ -18,6 +18,10 @@ public class NetworkedServer : MonoBehaviour
 
     private List<PlayerAccount> playerAccounts = new List<PlayerAccount>();
 
+    public List<Plays> playsList = new List<Plays>();
+
+    public PlayerAccount winnerAccount;
+
     Match newMatch = new Match();
     // Start is called before the first frame update
 
@@ -78,6 +82,19 @@ public class NetworkedServer : MonoBehaviour
         NetworkTransport.Send(hostID, id, reliableChannelID, buffer, msg.Length * sizeof(char), out error);
 
     }
+
+
+    IEnumerator SendReplay(List<Plays> plays, int id)
+    {
+        Debug.Log(plays.Count);
+        for (int i = 0; i < plays.Count; i++)
+        {
+            SendMessageToClient(ServerToClientSignifiers.playTurn + "," + (plays[i].isO ? "1" : "0" ) + "," + plays[i].index + ",0", id);
+            yield return new WaitForSeconds(.2f);
+        }
+        SendMessageToClient(ServerToClientSignifiers.winner + ",0," + winnerAccount.name, id);
+    }
+
 
     private void ProcessRecievedMsg(string msg, int id)
     {
@@ -156,7 +173,14 @@ public class NetworkedServer : MonoBehaviour
                 var player = newMatch.connectedAccounts.FirstOrDefault(x => x.connectionID == id);
                 if(player != null)
                 {
+
                     newMatch.gameData[result] = player.isO ? 1 : 0;
+
+                    var play = new Plays();
+                    play.SetListValues(result, player.isO);
+                    playsList.Add(play);
+
+
                     for (int i = 0; i < newMatch.connectedAccounts.Count; i++)
                     {
 
@@ -175,6 +199,7 @@ public class NetworkedServer : MonoBehaviour
                             SendMessageToClient(ServerToClientSignifiers.playTurn + "," + (player.isO ? "1" : "0") + "," + result, newMatch.connectedAccounts[i].connectionID);
 
                         }
+
                     }
                     if (newMatch.isWinner(player.isO ? 1 : 0))
                     {
@@ -189,9 +214,14 @@ public class NetworkedServer : MonoBehaviour
                                 SendMessageToClient(ServerToClientSignifiers.winner + ",0," + player.name, p.connectionID);
                             }
                         }
+                        winnerAccount = player;
                     }
                 }
             }
+        }
+        else if (signifier == ClientToServerSignifiers.sendReplay)
+        {
+            StartCoroutine(SendReplay(playsList, id));
         }
     }
 }
@@ -220,6 +250,8 @@ public static class ClientToServerSignifiers
     public const int login = 2;
 
     public const int sendPlay = 3;
+
+    public const int sendReplay = 4;
 }
 
 public static class ServerToClientSignifiers

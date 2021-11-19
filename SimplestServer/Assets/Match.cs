@@ -10,7 +10,7 @@ public class Match
     public static int maxGameClients = 2;
 
     public int[] gameData = {-1,-1,-1,-1,-1,-1,-1,-1,-1};
-    
+
 
     public bool isWinner(int id)
     {
